@@ -14,5 +14,6 @@ sealed .equates.
 ( Defining words for equates.)
 : equ     ( offset)  current preserve  .equates. definitions  constant ;
 : vector  ( offset)  equ ;
+: field ( offset width) 1 swap << 1 - swap << equ ;
 : irq     ( offset)  15 + 2* 2* equ ;
 : aka   .equates. chain' execute ;  ( for making synonyms)

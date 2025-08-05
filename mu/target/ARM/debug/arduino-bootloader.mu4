@@ -1,0 +1,95 @@
+( This file is part of muforth: https://muforth.dev/
+
+  Copyright 2023 Alex Maestas. (Read the LICENSE for details.)
+
+loading Arduino-esque bootloader support
+
+( Possibly working!! Don't get your hopes up. ;-)
+
+( We need target serial support.)
+.ifndef target-raw
+  ld target/common/serial.mu4
+.then
+
+( Make spy work better. This is a mostly ASCII protocol, so make it easier
+  to see what is going on by printing visible codes as themselves. Only
+  control codes will show up as two digit hex values.)
+
+: .char  ( ch - ch)
+   dup  dup letter? if  emit space  else  .h8_  then
+   dup #LF = if  cr  then ;
+
+: send          spy @ if  ." >"  .char  then  _send ;
+: recv   _recv  spy @ if  ." <"  .char  then ;
+
+: chip   ( a u)  cr  ." Connected to "  type ;
+
+( Send a terminator, not really a CRLF, to the chip.)
+: <crlf>   char # send  #LF send ;
+
+( Send a chunk of bytes to the chip with no terminator.)
+: send-chunk   ( a u)  for  c@+ swap  send  next  drop ;
+
+( format an address)
+: (.hcell)  hex   <#  |cell @       2* for # next  #>  ;
+
+runtime
+( Send a string, followed by the command terminator, to the chip.)
+: (send")   ( a u)  send-chunk  <crlf> ;
+
+compiler
+: send"    \ "  \ (send") ;
+
+forth
+: send"    char " parse  (send") ;
+
+' nope ( prompt)
+mode __isp
+
+( Parse a line from target.)
+: process  ( key - done)
+   dup #CR = if drop  0 ^ then
+   dup #LF = if drop -1 ^ then ( done)
+   m&  0 ;
+
+128 buffer inbuf
+: get-line  ( - a u)
+   m preserve  inbuf m !
+   begin  recv process  until
+   inbuf  m @  over - ;
+
+: isp.hello
+   (  We start off at 115200 because we expect to be connected via USB UART.)
+   115200 bps  flush  drain
+   send" V" get-line chip ;
+
+( XXX For now, fake the SP)
+variable fake-sp  "deadbeef fake-sp !
+: isp.get-sp   ( - sp)   fake-sp @ ;
+: isp.set-sp   ( sp)     fake-sp ! ;
+
+: send-addr ( a -)
+   (.hcell) send-chunk ;
+
+: cmd-addr-len  ( a u cmd - u)
+   radix preserve
+   sep preserve -sep
+   send ( command)
+   swap send-addr
+   char , send
+   dup send-addr  <crlf> ;
+
+: isp.read     ( buf a u)
+   m preserve  rot m !
+   char w cmd-addr-len  for  recv m&  next ;
+
+: isp.write    ( buf a u)
+   m preserve  rot m !
+   char W cmd-addr-len  for  m* send  next ;
+
+: isp.run      ( pc)
+   char G (.hcell) send-chunk <crlf> ;
+
+( The interface for the interact code. Implemented by all debug transports.)
+: isp
+   chat-via  isp.hello  isp.get-sp  isp.set-sp  isp.read  isp.write  isp.run ;
