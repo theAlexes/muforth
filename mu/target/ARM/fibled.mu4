@@ -9,24 +9,34 @@ hex
 
 %0000:0000:0000:0000:1000:0000:0000:0000 constant np-data
 
-: wait-to-clear ( addr mask)
-  begin 2dup swap @ and 0= until ( nothing)
+: sync ( addr mask)
+  begin
+    2dup swap @ and
+  0= until ( nothing)
+  drop drop ;
+
+: csync ( addr mask)
+  begin
+    2dup swap c@ and
+  0= until ( nothing)
   drop drop ;
 
 : dfll-sync
-  SYSCTRL_PCLKSR SYSCTRL_PCLKSR_OSC8MRDY wait-to-clear ;
+  SYSCTRL_PCLKSR SYSCTRL_PCLKSR_OSC8MRDY sync ;
 : gclk-sync
-  GCLK_STATUS GCLK_STATUS_SYNCBUSY wait-to-clear ;
+  GCLK_STATUS GCLK_STATUS_SYNCBUSY csync ;
 
 : led-on PORT_OUTCLR0 ! ;
 : led-off PORT_OUTSET0 ! ;
 
 decimal
 : sysinit ( set the clocks to 48MHz so USB can do the thing)
-  NVMCTRL_CTRLB [ 1 1 << #] set! ( set flash wait states like the 'duino runtime does it)
-  PM_APBAMASK PM_APBAMASK_GCLK_ set! ( similar for the bus mask)
+  ( https://blog.thea.codes/understanding-the-sam-d21-clocks/)
+  NVMCTRL_CTRLB [ 1 1 << #] set! ( set flash wait states to target 48mhz operation)
 
-  ( OSC32k calibration is stored as a 7-bit field starting at bit 6
+  ( first we start up the internal 32khz oscillator for the PLL.
+
+    OSC32k calibration is stored as a 7-bit field starting at bit 6
     of the second word of the NVM fuses area)
   $00806024 @
   $0a << $007f0000 and ( shift it into its correct place for the calibration value and mask it off)
@@ -35,12 +45,12 @@ decimal
   SYSCTRL_OSC32K_ENABLE or
   SYSCTRL_OSC32K swap ! ( start up the internal 32KHz oscillator)
 
-  SYSCTRL_PCLKSR SYSCTRL_PCLKSR_OSC32KRDY wait-to-clear
+  SYSCTRL_PCLKSR SYSCTRL_PCLKSR_OSC32KRDY sync
 
   GCLK_CTRL GCLK_CTRL_SWRST ! ( reset the general clock controller)
   begin ( wait for reset to finish)
-    GCLK_CTRL @ GCLK_CTRL_SWRST and
-    GCLK_STATUS @ GCLK_STATUS_SYNCBUSY and
+    GCLK_CTRL c@ GCLK_CTRL_SWRST and
+    GCLK_STATUS c@ GCLK_STATUS_SYNCBUSY and
     or
   0= until
 
@@ -51,7 +61,7 @@ decimal
     4 8 << or ( source it to OSC32K)
     GCLK_GENCTRL_GENEN or ! gclk-sync
 
-  GCLK_CLKCTRL ( the DFLL is, confusingly, 0; this makes its clock come from OSC32K)
+  GCLK_CLKCTRL ( the DFLL is, confusingly, 0 in this register; this makes its clock come from OSC32K by way of GCLK1)
   1 8 <<
   GCLK_CLKCTRL_CLKEN or h! gclk-sync
 
@@ -82,8 +92,7 @@ decimal
   SYSCTRL_DFLLCTRL
     SYSCTRL_DFLLCTRL_MODE
     SYSCTRL_DFLLCTRL_CCDIS or
-    SYSCTRL_DFLLCTRL_USBCRM or
-    SYSCTRL_DFLLCTRL_BPLCKC or set! dfll-sync
+    SYSCTRL_DFLLCTRL_USBCRM or set! dfll-sync
 
   ( switch it on)
   SYSCTRL_DFLLCTRL SYSCTRL_DFLLCTRL_ENABLE set! dfll-sync
@@ -91,7 +100,7 @@ decimal
   ( set the generic clock generator 0 to source from the DFLL, which is mux 0, and not to divide it)
   GCLK_GENDIV 0 ! dfll-sync
 
-  ( now enable generator 0 with the DFLL as source)
+  ( now enable generator 0 with the DFLL as source, both implied by the zero fields)
   GCLK_GENCTRL
     7 8 << ( dfll src)
     GCLK_GENCTRL_IDC or
