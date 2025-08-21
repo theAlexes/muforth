@@ -5,9 +5,34 @@
 loading the Alexes' experimental code
 
 __meta
-hex
+decimal
 
+$2000:0600 constant foo
 %0000:0000:0000:0000:1000:0000:0000:0000 constant np-data
+
+: mark ( a -- )
+  foo c!
+;
+
+code semi-putc
+  3 r0 movs
+  r7 r1 movs
+  $ab bkpt
+  next
+;c
+pool,
+
+: wait ( addr mask)
+  begin
+    2dup swap @ and
+  while 0= repeat ( nothing)
+  drop drop ;
+
+: cwait ( addr mask)
+  begin
+    2dup swap c@ and
+  while 0= repeat
+  drop drop ;
 
 : sync ( addr mask)
   begin
@@ -22,83 +47,118 @@ hex
   drop drop ;
 
 : dfll-sync
-  SYSCTRL_PCLKSR SYSCTRL_PCLKSR_OSC8MRDY sync ;
+  SYSCTRL_PCLKSR SYSCTRL_PCLKSR_OSC8MRDY wait ;
 : gclk-sync
-  GCLK_STATUS GCLK_STATUS_SYNCBUSY csync ;
+  GCLK_STATUS GCLK_STATUS_SYNCBUSY cwait ;
 
 : led-on PORT_OUTCLR0 ! ;
 : led-off PORT_OUTSET0 ! ;
 
-decimal
 : sysinit ( set the clocks to 48MHz so USB can do the thing)
   ( https://blog.thea.codes/understanding-the-sam-d21-clocks/)
-  NVMCTRL_CTRLB [ 1 1 << #] set! ( set flash wait states to target 48mhz operation)
+  [ 1 1 << #] NVMCTRL_CTRLB set! ( set flash wait states to target 48mhz operation)
+  1 mark
 
   ( first we start up the internal 32khz oscillator for the PLL.
 
     OSC32k calibration is stored as a 7-bit field starting at bit 6
     of the second word of the NVM fuses area)
   $00806024 @
+  2 mark
   $0a << $007f0000 and ( shift it into its correct place for the calibration value and mask it off)
   [ 6 8 << #] or ( set oscillator startup time; 3 bits starting at bit 8)
   SYSCTRL_OSC32K_EN32K or
   SYSCTRL_OSC32K_ENABLE or
-  SYSCTRL_OSC32K swap ! ( start up the internal 32KHz oscillator)
+  SYSCTRL_OSC32K ! ( start up the internal 32KHz oscillator)
 
-  SYSCTRL_PCLKSR SYSCTRL_PCLKSR_OSC32KRDY sync
+  3 mark
 
-  GCLK_CTRL GCLK_CTRL_SWRST ! ( reset the general clock controller)
+  SYSCTRL_PCLKSR SYSCTRL_PCLKSR_OSC32KRDY wait
+
+  4 mark
+
+  GCLK_CTRL_SWRST GCLK_CTRL ! ( reset the general clock controller)
   begin ( wait for reset to finish)
     GCLK_CTRL c@ GCLK_CTRL_SWRST and
     GCLK_STATUS c@ GCLK_STATUS_SYNCBUSY and
     or
   0= until
 
-  ( put osc32k as GCLK1 source)
-  GCLK_GENDIV 1 ! gclk-sync
-  GCLK_GENCTRL
-    1 ( control GCLK1)
-    4 8 << or ( source it to OSC32K)
-    GCLK_GENCTRL_GENEN or ! gclk-sync
+  5 mark
 
-  GCLK_CLKCTRL ( the DFLL is, confusingly, 0 in this register; this makes its clock come from OSC32K by way of GCLK1)
+  ( put osc32k as GCLK1 source)
+  1 GCLK_GENDIV ! gclk-sync
+
+  6 mark
+
+  1 ( control GCLK1)
+  4 8 << or ( source it to OSC32K)
+  GCLK_GENCTRL_GENEN or
+  GCLK_GENCTRL !
+  gclk-sync
+
+  7 mark
+
+  ( the DFLL is, confusingly, 0 in this register; this makes its clock come from OSC32K by way of GCLK1)
   1 8 <<
-  GCLK_CLKCTRL_CLKEN or h! gclk-sync
+  GCLK_CLKCTRL_CLKEN or
+  GCLK_CLKCTRL h! gclk-sync
+
 
   ( work around a bug http://avr32.icgroup.norway.atmel.com/bugzilla/show_bug.cgi?id=9905)
   dfll-sync
-  SYSCTRL_DFLLCTRL SYSCTRL_DFLLCTRL_ENABLE ! dfll-sync
+
+  8 mark
+
+  SYSCTRL_DFLLCTRL_ENABLE SYSCTRL_DFLLCTRL ! dfll-sync
+
+  9 mark
 
   ( load coarse calibration for FLL)
   $00806024 @
   26 >> $3f and
     dup $3f = if drop $1f then
-  10 << SYSCTRL_DFLLVAL swap set!
+  10 << SYSCTRL_DFLLVAL set!
+
+  10 mark
 
   ( set default fine calibration)
-  SYSCTRL_DFLLVAL $1ff set!
+  $1ff SYSCTRL_DFLLVAL set!
+
+  11 mark
 
   ( set multiplier config)
-  SYSCTRL_DFLLMUL [
+  [
     7 16 << ( coarse maxstep)
     10 26 << or ( fine maxstep)
     48000 or ( mult factor)
-  #] !
+  #] SYSCTRL_DFLLMUL !
+
+  12 mark
 
   ( shut the DFLL down so we can bonk a new config in)
   SYSCTRL_DFLLCTRL 0 ! dfll-sync
 
+  13 mark
+
   ( bonk a new config in)
-  SYSCTRL_DFLLCTRL
-    SYSCTRL_DFLLCTRL_MODE
+  SYSCTRL_DFLLCTRL_MODE
     SYSCTRL_DFLLCTRL_CCDIS or
-    SYSCTRL_DFLLCTRL_USBCRM or set! dfll-sync
+    SYSCTRL_DFLLCTRL_USBCRM or
+  SYSCTRL_DFLLCTRL set! dfll-sync
+
+  14 mark
 
   ( switch it on)
-  SYSCTRL_DFLLCTRL SYSCTRL_DFLLCTRL_ENABLE set! dfll-sync
+  SYSCTRL_DFLLCTRL_ENABLE SYSCTRL_DFLLCTRL  set! dfll-sync
+
+  15 mark
 
   ( set the generic clock generator 0 to source from the DFLL, which is mux 0, and not to divide it)
-  GCLK_GENDIV 0 ! dfll-sync
+  0 GCLK_GENDIV ! dfll-sync
+
+
+  16 mark
 
   ( now enable generator 0 with the DFLL as source, both implied by the zero fields)
   GCLK_GENCTRL
@@ -107,13 +167,17 @@ decimal
     GCLK_GENCTRL_GENEN or ! dfll-sync
   ;
 
+align
 : main
+  -1 mark
   sysinit
   begin
+    66 mark
   again ;
 
 HardFault_exc handler
-   here b  ;c  ( hang)
+
+  here b  ;c  ( hang)
 
 NMI_exc handler default-handler
-   lr bx  ;c  ( return to sender!!)
+  lr bx  ;c  ( return to sender!!)
