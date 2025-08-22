@@ -15,6 +15,7 @@ decimal
 : mark ( a -- )
   marker ! ;
 
+( wait and cwait spin until the bit is set - they wait for ready)
 : wait ( addr mask)
   begin
     2dup swap @ and
@@ -27,6 +28,7 @@ decimal
   while 0= repeat
   drop drop ;
 
+( sync and csync spin while the bit is set - they wait for the sync to finish)
 : sync ( addr mask)
   begin
     2dup swap @ and
@@ -168,14 +170,27 @@ decimal
 
   14 mark
 
-  $1a 1 route-gclk
-  $14 1 route-gclk ;
+  $1a 1 route-gclk ( tcc0)
+  ( $14 1 route-gclk uart) ;
+
+: tcc-sync ( tcc)
+  10 << TCC_SYNCBUSY -1 wait ;
+
+: tcc0-init
+  $10 mark
+
+  PM_APBCMASK_TCC0_ PM_APBCMASK set!
+
+  $11 mark
+
+  TCC_CTRLA_SWRST TCC_CTRLA set! 0 tcc-sync ;
 
 : main
   -1 mark
   base-clock-init
   -2 mark
   peripheral-clock-init
+  tcc0-init
   begin
     $4200 mark
   again ;
