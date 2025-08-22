@@ -1,0 +1,30 @@
+|  Copyright 2023 Alex Maestas. (Read the LICENSE for details.)
+
+loading System clock driver
+
+| some constants are missing from the SVD
+$0080:6024 equ NVMCAL
+
+4 equ GCLK_GENCTRL_SRC_OSC32K
+6 equ GCLK_GENCTRL_SRC_OSC8M
+7 equ GCLK_GENCTRL_SRC_DFLL
+
+$00 equ GCLK_TO_DFLL48_REF
+$1a equ GCLK_TO_TCC0_TCC1
+
+__meta target
+
+: dfll-sync
+  SYSCTRL_PCLKSR SYSCTRL_PCLKSR_DFLLRDY wait ;
+: gclk-sync
+  GCLK_STATUS GCLK_STATUS_SYNCBUSY csync ;
+
+: source-gclk ( gclk source)
+  over ( gclk source gclk)
+  [ 1 8 << #] or GCLK_GENDIV ! gclk-sync
+  8 << or [ GCLK_GENCTRL_IDC GCLK_GENCTRL_GENEN or #] or
+  GCLK_GENCTRL ! gclk-sync ;
+
+: route-gclk ( periph source)
+  8 << or GCLK_CLKCTRL_CLKEN or
+  GCLK_CLKCTRL h! gclk-sync ;

@@ -1,0 +1,31 @@
+|  Copyright 2023 Alex Maestas. (Read the LICENSE for details.)
+
+loading Hardware primitives
+
+__meta target
+
+( wait and cwait spin until the bit is set - they wait for ready)
+: wait ( addr mask)
+  begin
+    2dup swap @ and
+  while 0= repeat ( nothing)
+  drop drop ;
+
+: cwait ( addr mask)
+  begin
+    2dup swap c@ and
+  while 0= repeat
+  drop drop ;
+
+( sync and csync spin while the bit is set - they wait for the sync to finish)
+: sync ( addr mask)
+  begin
+    2dup swap @ and
+  0= until ( nothing)
+  drop drop ;
+
+: csync ( addr mask)
+  begin
+    2dup swap c@ and
+  0= until ( nothing)
+  drop drop ;

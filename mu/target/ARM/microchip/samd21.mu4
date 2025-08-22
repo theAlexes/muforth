@@ -1,12 +1,12 @@
-( This file is part of muforth: https://muforth.dev/
-
-  Copyright 2023 Alex Maestas. (Read the LICENSE for details.)
+| This file is part of muforth: https://muforth.dev/
+|
+| Copyright 2023-2025 Alex Maestas. (Read the LICENSE for details.)
 
 loading ATSAMD21E18A chip definitions
 
-8 Ki constant #eeprom  ( size of eeprom emulation area at the end of flash)
-8 Ki constant #boot    ( size of bootloader at the start of flash)
- $20 constant #vectors ( size of vector table just after the bootloader)
+8 Ki constant #eeprom  | size of eeprom emulation area at the end of flash
+8 Ki constant #boot    | size of bootloader at the start of flash
+ $20 constant #vectors | size of vector table just after the bootloader
 
               $0000_2000 constant @flash
 256 Ki #eeprom - #boot - constant #flash

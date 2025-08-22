@@ -2,67 +2,35 @@
 
   Copyright 2023 Alex Maestas. (Read the LICENSE for details.)
 
-loading the Alexes' experimental code
+loading Fibonacci LED main program
 
 __meta
-hex
 
 variable marker
-$0080:6024 constant NVMCAL
 
 decimal
 
 : mark ( a -- )
   marker ! ;
 
-( wait and cwait spin until the bit is set - they wait for ready)
-: wait ( addr mask)
-  begin
-    2dup swap @ and
-  while 0= repeat ( nothing)
-  drop drop ;
-
-: cwait ( addr mask)
-  begin
-    2dup swap c@ and
-  while 0= repeat
-  drop drop ;
-
-( sync and csync spin while the bit is set - they wait for the sync to finish)
-: sync ( addr mask)
-  begin
-    2dup swap @ and
-  0= until ( nothing)
-  drop drop ;
-
-: csync ( addr mask)
-  begin
-    2dup swap c@ and
-  0= until ( nothing)
-  drop drop ;
-
-: dfll-sync
-  SYSCTRL_PCLKSR SYSCTRL_PCLKSR_OSC8MRDY wait ;
-: gclk-sync
-  GCLK_STATUS GCLK_STATUS_SYNCBUSY cwait ;
-
-: route-gclk ( periph source)
-  8 << or GCLK_CLKCTRL_CLKEN or
-  GCLK_CLKCTRL h! gclk-sync ;
+ld! target/ARM/microchip/hardware-primitives.mu4
+ld! target/ARM/microchip/samd21-clocks.mu4
 
 : base-clock-init ( set the clocks to 48MHz off of the internal 32k oscillator so USB can do the thing)
   ( https://blog.thea.codes/understanding-the-sam-d21-clocks/)
   [ 1 1 << #] NVMCTRL_CTRLB set! ( set flash wait states to target 48mhz operation)
 
-  ( first we start up the internal 32khz oscillator for the PLL.
+  ( shut off all of the peripherals on APB C; we'll start them up one-by-one later)
+  0 PM_APBCMASK !
 
-    OSC32k calibration is stored as a 7-bit field starting at bit 6
+  ( then we start up the internal 32khz oscillator for the PLL.)
+  [ 6 8 << ( set oscillator startup time; 3 bits starting at bit 8)
+    SYSCTRL_OSC32K_EN32K or
+    SYSCTRL_OSC32K_ENABLE or #]
+  ( OSC32k calibration is stored as a 7-bit field starting at bit 6
     of the second word of the NVM fuses area)
   NVMCAL @
-  $0a << $007f0000 and ( shift it into its correct place for the calibration value and mask it off)
-  [ 6 8 << #] or ( set oscillator startup time; 3 bits starting at bit 8)
-  SYSCTRL_OSC32K_EN32K or
-  SYSCTRL_OSC32K_ENABLE or
+  $0a << $007f0000 and or ( shift it into its correct place for the calibration value mask it off, OR it with the flags)
   SYSCTRL_OSC32K ! ( start up the internal 32KHz oscillator)
 
   SYSCTRL_PCLKSR SYSCTRL_PCLKSR_OSC32KRDY wait
@@ -78,26 +46,20 @@ decimal
 
   2 mark
 
-  ( put osc32k as GCLK2 source. why 2? because later we'll use 1 for the peripheral clocks, which run faster.)
-  2 GCLK_GENDIV ! gclk-sync
+  ( put osc32k as GCLK2 source, dividing by 1. why 2? because later we'll use 1 for the peripheral clocks, which run faster.)
+
+  2 GCLK_GENCTRL_SRC_OSC32K source-gclk
 
   3 mark
 
-  [ 2 ( control GCLK2)
-    4 8 << or ( source it to OSC32K)
-    GCLK_GENCTRL_GENEN or #]
-  GCLK_GENCTRL ! gclk-sync
-
-  4 mark
-
   ( the DFLL is, confusingly, 0 in this register; this makes its clock come from OSC32K by way of GCLK2)
-  0 2 route-gclk
+  GCLK_TO_DFLL48_REF 2 route-gclk
 
   ( work around a bug http://avr32.icgroup.norway.atmel.com/bugzilla/show_bug.cgi?id=9905)
   dfll-sync
   SYSCTRL_DFLLCTRL_ENABLE SYSCTRL_DFLLCTRL ! dfll-sync
 
-  5 mark
+  4 mark
 
   ( load coarse calibration for FLL)
   NVMCAL @
@@ -109,8 +71,7 @@ decimal
   $1ff SYSCTRL_DFLLVAL set!
 
   ( set multiplier config)
-  [
-    7 16 << ( coarse maxstep)
+  [ 7 16 << ( coarse maxstep)
     10 26 << or ( fine maxstep)
     48000 or ( mult factor)
   #] SYSCTRL_DFLLMUL !
@@ -118,60 +79,46 @@ decimal
   ( shut the DFLL down so we can bonk a new config in)
   SYSCTRL_DFLLCTRL 0 ! dfll-sync
 
-  6 mark
+  5 mark
 
   ( bonk a new config in)
   [ SYSCTRL_DFLLCTRL_MODE
     SYSCTRL_DFLLCTRL_CCDIS or
-    SYSCTRL_DFLLCTRL_USBCRM or #]
-  SYSCTRL_DFLLCTRL set! dfll-sync
+    SYSCTRL_DFLLCTRL_USBCRM or
+  #] SYSCTRL_DFLLCTRL set! dfll-sync
 
-  7 mark
+  6 mark
 
   ( switch it on)
   SYSCTRL_DFLLCTRL_ENABLE SYSCTRL_DFLLCTRL set! dfll-sync
 
-  8 mark
+  7 mark
 
-  ( set the generic clock generator 0 to source from the DFLL, which is mux 0, and not to divide it)
-  0 GCLK_GENDIV ! dfll-sync
+  ( now enable generator 0 with the DFLL as source)
+  0 GCLK_GENCTRL_SRC_DFLL source-gclk ;
+
+: peripheral-clock-init
+  8 mark
+  ( don't divide the 8M clock, scale that down at the peripheral)
+
+  [ SYSCTRL_OSC8M_PRESC SYSCTRL_OSC8M_ENABLE or #] SYSCTRL_OSC8M clr!
 
   9 mark
 
-  ( now enable generator 0 with the DFLL as source, both implied by the zero fields)
-  [ 7 8 << ( dfll src)
-    GCLK_GENCTRL_IDC or
-    GCLK_GENCTRL_GENEN or #]
-  GCLK_GENCTRL ! dfll-sync ;
-
-: peripheral-clock-init
-  10 mark
-
   [ SYSCTRL_OSC8M_ENABLE SYSCTRL_OSC8M_RUNSTDBY or #] SYSCTRL_OSC8M set!
 
-  11 mark
+  $a mark
 
   SYSCTRL_PCLKSR SYSCTRL_PCLKSR_OSC8MRDY wait
 
-  12 mark
+  $b mark
 
-  ( don't divide the 8M clock, scale that down at the peripheral)
+  1 GCLK_GENCTRL_SRC_OSC8M source-gclk
 
-  SYSCTRL_OSC8M_PRESC SYSCTRL_OSC8M clr!
+  $c mark
 
-  13 mark
-
-  1 GCLK_GENDIV ! gclk-sync
-
-  [ 1
-    6 8 << or ( wire gclk1 to source 6, the 8MHz clock)
-    GCLK_GENCTRL_GENEN or #]
-  GCLK_GENCTRL ! gclk-sync
-
-  14 mark
-
-  $1a 1 route-gclk ( tcc0)
-  ( $14 1 route-gclk uart) ;
+  GCLK_TO_TCC0_TCC1 1 route-gclk ( tcc0)
+  ( $14 1 route-gclk ( uart) ;
 
 : tcc-sync ( tcc)
   10 << TCC_SYNCBUSY -1 wait ;
@@ -182,6 +129,10 @@ decimal
   PM_APBCMASK_TCC0_ PM_APBCMASK set!
 
   $11 mark
+
+  TCC_CTRLA_ENABLE TCC_CTRLA clr! 0 tcc-sync
+
+  $12 mark
 
   TCC_CTRLA_SWRST TCC_CTRLA set! 0 tcc-sync ;
 
