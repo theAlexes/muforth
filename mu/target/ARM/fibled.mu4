@@ -13,16 +13,7 @@ $0080:6024 constant NVMCAL
 decimal
 
 : mark ( a -- )
-  marker !
-;
-
-code semi-putc
-  3 r0 movs
-  r7 r1 movs
-  $ab bkpt
-  next
-;c
-pool,
+  marker ! ;
 
 : wait ( addr mask)
   begin
@@ -53,6 +44,9 @@ pool,
 : gclk-sync
   GCLK_STATUS GCLK_STATUS_SYNCBUSY cwait ;
 
+: route-gclk ( periph source)
+  8 << or GCLK_CLKCTRL_CLKEN or
+  GCLK_CLKCTRL h! gclk-sync ;
 
 : base-clock-init ( set the clocks to 48MHz off of the internal 32k oscillator so USB can do the thing)
   ( https://blog.thea.codes/understanding-the-sam-d21-clocks/)
@@ -95,9 +89,7 @@ pool,
   4 mark
 
   ( the DFLL is, confusingly, 0 in this register; this makes its clock come from OSC32K by way of GCLK2)
-  [ 2 8 <<
-    GCLK_CLKCTRL_CLKEN or #]
-  GCLK_CLKCTRL h! gclk-sync
+  0 2 route-gclk
 
   ( work around a bug http://avr32.icgroup.norway.atmel.com/bugzilla/show_bug.cgi?id=9905)
   dfll-sync
@@ -151,7 +143,33 @@ pool,
   GCLK_GENCTRL ! dfll-sync ;
 
 : peripheral-clock-init
-  10 mark begin again ;
+  10 mark
+
+  [ SYSCTRL_OSC8M_ENABLE SYSCTRL_OSC8M_RUNSTDBY or #] SYSCTRL_OSC8M set!
+
+  11 mark
+
+  SYSCTRL_PCLKSR SYSCTRL_PCLKSR_OSC8MRDY wait
+
+  12 mark
+
+  ( don't divide the 8M clock, scale that down at the peripheral)
+
+  SYSCTRL_OSC8M_PRESC SYSCTRL_OSC8M clr!
+
+  13 mark
+
+  1 GCLK_GENDIV ! gclk-sync
+
+  [ 1
+    6 8 << or ( wire gclk1 to source 6, the 8MHz clock)
+    GCLK_GENCTRL_GENEN or #]
+  GCLK_GENCTRL ! gclk-sync
+
+  14 mark
+
+  $1a 1 route-gclk
+  $14 1 route-gclk ;
 
 : main
   -1 mark
