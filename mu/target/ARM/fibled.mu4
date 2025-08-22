@@ -5,13 +5,15 @@
 loading the Alexes' experimental code
 
 __meta
+hex
+
+variable marker
+$0080:6024 constant NVMCAL
+
 decimal
 
-$2000:0600 constant foo
-%0000:0000:0000:0000:1000:0000:0000:0000 constant np-data
-
 : mark ( a -- )
-  foo c!
+  marker !
 ;
 
 code semi-putc
@@ -51,31 +53,25 @@ pool,
 : gclk-sync
   GCLK_STATUS GCLK_STATUS_SYNCBUSY cwait ;
 
-: led-on PORT_OUTCLR0 ! ;
-: led-off PORT_OUTSET0 ! ;
 
-: sysinit ( set the clocks to 48MHz so USB can do the thing)
+: base-clock-init ( set the clocks to 48MHz off of the internal 32k oscillator so USB can do the thing)
   ( https://blog.thea.codes/understanding-the-sam-d21-clocks/)
   [ 1 1 << #] NVMCTRL_CTRLB set! ( set flash wait states to target 48mhz operation)
-  1 mark
 
   ( first we start up the internal 32khz oscillator for the PLL.
 
     OSC32k calibration is stored as a 7-bit field starting at bit 6
     of the second word of the NVM fuses area)
-  $00806024 @
-  2 mark
+  NVMCAL @
   $0a << $007f0000 and ( shift it into its correct place for the calibration value and mask it off)
   [ 6 8 << #] or ( set oscillator startup time; 3 bits starting at bit 8)
   SYSCTRL_OSC32K_EN32K or
   SYSCTRL_OSC32K_ENABLE or
   SYSCTRL_OSC32K ! ( start up the internal 32KHz oscillator)
 
-  3 mark
-
   SYSCTRL_PCLKSR SYSCTRL_PCLKSR_OSC32KRDY wait
 
-  4 mark
+  1 mark
 
   GCLK_CTRL_SWRST GCLK_CTRL ! ( reset the general clock controller)
   begin ( wait for reset to finish)
@@ -84,48 +80,39 @@ pool,
     or
   0= until
 
-  5 mark
+  2 mark
 
-  ( put osc32k as GCLK1 source)
-  1 GCLK_GENDIV ! gclk-sync
+  ( put osc32k as GCLK2 source. why 2? because later we'll use 1 for the peripheral clocks, which run faster.)
+  2 GCLK_GENDIV ! gclk-sync
 
-  6 mark
+  3 mark
 
-  1 ( control GCLK1)
-  4 8 << or ( source it to OSC32K)
-  GCLK_GENCTRL_GENEN or
-  GCLK_GENCTRL !
-  gclk-sync
+  [ 2 ( control GCLK2)
+    4 8 << or ( source it to OSC32K)
+    GCLK_GENCTRL_GENEN or #]
+  GCLK_GENCTRL ! gclk-sync
 
-  7 mark
+  4 mark
 
-  ( the DFLL is, confusingly, 0 in this register; this makes its clock come from OSC32K by way of GCLK1)
-  1 8 <<
-  GCLK_CLKCTRL_CLKEN or
+  ( the DFLL is, confusingly, 0 in this register; this makes its clock come from OSC32K by way of GCLK2)
+  [ 2 8 <<
+    GCLK_CLKCTRL_CLKEN or #]
   GCLK_CLKCTRL h! gclk-sync
-
 
   ( work around a bug http://avr32.icgroup.norway.atmel.com/bugzilla/show_bug.cgi?id=9905)
   dfll-sync
-
-  8 mark
-
   SYSCTRL_DFLLCTRL_ENABLE SYSCTRL_DFLLCTRL ! dfll-sync
 
-  9 mark
+  5 mark
 
   ( load coarse calibration for FLL)
-  $00806024 @
+  NVMCAL @
   26 >> $3f and
     dup $3f = if drop $1f then
   10 << SYSCTRL_DFLLVAL set!
 
-  10 mark
-
   ( set default fine calibration)
   $1ff SYSCTRL_DFLLVAL set!
-
-  11 mark
 
   ( set multiplier config)
   [
@@ -134,50 +121,49 @@ pool,
     48000 or ( mult factor)
   #] SYSCTRL_DFLLMUL !
 
-  12 mark
-
   ( shut the DFLL down so we can bonk a new config in)
   SYSCTRL_DFLLCTRL 0 ! dfll-sync
 
-  13 mark
+  6 mark
 
   ( bonk a new config in)
-  SYSCTRL_DFLLCTRL_MODE
+  [ SYSCTRL_DFLLCTRL_MODE
     SYSCTRL_DFLLCTRL_CCDIS or
-    SYSCTRL_DFLLCTRL_USBCRM or
+    SYSCTRL_DFLLCTRL_USBCRM or #]
   SYSCTRL_DFLLCTRL set! dfll-sync
 
-  14 mark
+  7 mark
 
   ( switch it on)
-  SYSCTRL_DFLLCTRL_ENABLE SYSCTRL_DFLLCTRL  set! dfll-sync
+  SYSCTRL_DFLLCTRL_ENABLE SYSCTRL_DFLLCTRL set! dfll-sync
 
-  15 mark
+  8 mark
 
   ( set the generic clock generator 0 to source from the DFLL, which is mux 0, and not to divide it)
   0 GCLK_GENDIV ! dfll-sync
 
-
-  16 mark
+  9 mark
 
   ( now enable generator 0 with the DFLL as source, both implied by the zero fields)
-  GCLK_GENCTRL
-    7 8 << ( dfll src)
+  [ 7 8 << ( dfll src)
     GCLK_GENCTRL_IDC or
-    GCLK_GENCTRL_GENEN or ! dfll-sync
-  ;
+    GCLK_GENCTRL_GENEN or #]
+  GCLK_GENCTRL ! dfll-sync ;
 
-align
+: peripheral-clock-init
+  10 mark begin again ;
+
 : main
   -1 mark
-  sysinit
+  base-clock-init
+  -2 mark
+  peripheral-clock-init
   begin
-    66 mark
+    $4200 mark
   again ;
 
 HardFault_exc handler
-
-  here b  ;c  ( hang)
+  here b  ;c  ( rip)
 
 NMI_exc handler default-handler
-  lr bx  ;c  ( return to sender!!)
+  lr bx  ;c  ( thank you, next)
