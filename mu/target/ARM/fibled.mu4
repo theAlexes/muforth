@@ -15,135 +15,34 @@ decimal
 
 ld! target/ARM/microchip/hardware-primitives.mu4
 ld! target/ARM/microchip/samd21-clocks.mu4
+ld! target/ARM/microchip/samd21-tcc.mu4
 
-: base-clock-init ( set the clocks to 48MHz off of the internal 32k oscillator so USB can do the thing)
-  ( https://blog.thea.codes/understanding-the-sam-d21-clocks/)
-  [ 1 1 << #] NVMCTRL_CTRLB set! ( set flash wait states to target 48mhz operation)
+: led-ports-init
+  [ 1 10 << ( MO pin to 128-LED strand)
+    1  2 << or ( neopixel pin)
+    1 15 << or ( neopixel power)
+  #] dup PORT_DIRSET0 ! ( set these pins as outputs)
+  PORT_OUTCLR0 ! ( turn everything off)
+  [ 1 15 << #] PORT_OUTSET0 ! ( turn neopixel power on) ;
 
-  ( shut off all of the peripherals on APB C; we'll start them up one-by-one later)
-  0 PM_APBCMASK !
-
-  ( then we start up the internal 32khz oscillator for the PLL.)
-  [ 6 8 << ( set oscillator startup time; 3 bits starting at bit 8)
-    SYSCTRL_OSC32K_EN32K or
-    SYSCTRL_OSC32K_ENABLE or #]
-  ( OSC32k calibration is stored as a 7-bit field starting at bit 6
-    of the second word of the NVM fuses area)
-  NVMCAL @
-  $0a << $007f0000 and or ( shift it into its correct place for the calibration value mask it off, OR it with the flags)
-  SYSCTRL_OSC32K ! ( start up the internal 32KHz oscillator)
-
-  SYSCTRL_PCLKSR SYSCTRL_PCLKSR_OSC32KRDY wait
-
-  1 mark
-
-  GCLK_CTRL_SWRST GCLK_CTRL ! ( reset the general clock controller)
-  begin ( wait for reset to finish)
-    GCLK_CTRL c@ GCLK_CTRL_SWRST and
-    GCLK_STATUS c@ GCLK_STATUS_SYNCBUSY and
-    or
-  0= until
-
-  2 mark
-
-  ( put osc32k as GCLK2 source, dividing by 1. why 2? because later we'll use 1 for the peripheral clocks, which run faster.)
-
-  2 GCLK_GENCTRL_SRC_OSC32K source-gclk
-
-  3 mark
-
-  ( the DFLL is, confusingly, 0 in this register; this makes its clock come from OSC32K by way of GCLK2)
-  GCLK_TO_DFLL48_REF 2 route-gclk
-
-  ( work around a bug http://avr32.icgroup.norway.atmel.com/bugzilla/show_bug.cgi?id=9905)
-  dfll-sync
-  SYSCTRL_DFLLCTRL_ENABLE SYSCTRL_DFLLCTRL ! dfll-sync
-
-  4 mark
-
-  ( load coarse calibration for FLL)
-  NVMCAL @
-  26 >> $3f and
-    dup $3f = if drop $1f then
-  10 << SYSCTRL_DFLLVAL set!
-
-  ( set default fine calibration)
-  $1ff SYSCTRL_DFLLVAL set!
-
-  ( set multiplier config)
-  [ 7 16 << ( coarse maxstep)
-    10 26 << or ( fine maxstep)
-    48000 or ( mult factor)
-  #] SYSCTRL_DFLLMUL !
-
-  ( shut the DFLL down so we can bonk a new config in)
-  SYSCTRL_DFLLCTRL 0 ! dfll-sync
-
-  5 mark
-
-  ( bonk a new config in)
-  [ SYSCTRL_DFLLCTRL_MODE
-    SYSCTRL_DFLLCTRL_CCDIS or
-    SYSCTRL_DFLLCTRL_USBCRM or
-  #] SYSCTRL_DFLLCTRL set! dfll-sync
-
-  6 mark
-
-  ( switch it on)
-  SYSCTRL_DFLLCTRL_ENABLE SYSCTRL_DFLLCTRL set! dfll-sync
-
-  7 mark
-
-  ( now enable generator 0 with the DFLL as source)
-  0 GCLK_GENCTRL_SRC_DFLL source-gclk ;
-
-: peripheral-clock-init
-  8 mark
-  ( don't divide the 8M clock, scale that down at the peripheral)
-
-  [ SYSCTRL_OSC8M_PRESC SYSCTRL_OSC8M_ENABLE or #] SYSCTRL_OSC8M clr!
-
-  9 mark
-
-  [ SYSCTRL_OSC8M_ENABLE SYSCTRL_OSC8M_RUNSTDBY or #] SYSCTRL_OSC8M set!
-
-  $a mark
-
-  SYSCTRL_PCLKSR SYSCTRL_PCLKSR_OSC8MRDY wait
-
-  $b mark
-
-  1 GCLK_GENCTRL_SRC_OSC8M source-gclk
-
-  $c mark
-
-  GCLK_TO_TCC0_TCC1 1 route-gclk ( tcc0)
-  ( $14 1 route-gclk ( uart) ;
-
-: tcc-sync ( tcc)
-  10 << TCC_SYNCBUSY -1 wait ;
-
-: tcc0-init
-  $10 mark
-
-  PM_APBCMASK_TCC0_ PM_APBCMASK set!
-
-  $11 mark
-
-  TCC_CTRLA_ENABLE TCC_CTRLA clr! 0 tcc-sync
-
-  $12 mark
-
-  TCC_CTRLA_SWRST TCC_CTRLA set! 0 tcc-sync ;
+code w-f-i cpsie wfi next ;c
 
 : main
   -1 mark
   base-clock-init
   -2 mark
   peripheral-clock-init
-  tcc0-init
+  -3 mark
+  led-ports-init
+  -4 mark
+  ( nvic-init)
+  tcc0-init ( the single onboard neopixel is on TCC0, channel 2)
+  ( tcc1-init ( the fibonacci strand of neopixels defaults to being on TCC0,
+                channel 2. life is pain. luckily we can switch it to TCC1, channel 0)
+
   begin
     $4200 mark
+    w-f-i
   again ;
 
 HardFault_exc handler
