@@ -6,12 +6,13 @@ loading Fibonacci LED main program
 
 __meta
 
-variable marker
+variable state
+variable tcc0-flags
 
 decimal
 
-: mark ( a -- )
-  marker ! ;
+: state! ( a -- )
+  state ! ;
 
 ld! target/ARM/microchip/hardware-primitives.mu4
 ld! target/ARM/microchip/samd21-clocks.mu4
@@ -28,25 +29,35 @@ ld! target/ARM/microchip/samd21-tcc.mu4
 code w-f-i cpsie wfi next ;c
 
 : main
-  -1 mark
+  -1 state!
   base-clock-init
-  -2 mark
+  -2 state!
   peripheral-clock-init
-  -3 mark
+  -3 state!
   led-ports-init
-  -4 mark
+  -4 state!
   ( nvic-init)
   tcc0-init ( the single onboard neopixel is on TCC0, channel 2)
   ( tcc1-init ( the fibonacci strand of neopixels defaults to being on TCC0,
                 channel 2. life is pain. luckily we can switch it to TCC1, channel 0)
 
   begin
-    $4200 mark
+    $4200 state!
     w-f-i
   again ;
+
+TCC0_IRQ handler
+  TCC_INTFLAG w lit ( addr of int flag to w)
+  0 w x ldr         ( int flag to x)
+  >v tcc0-flags y lit ( addr of tcc0-flags to y)
+  0 w y str         ( int flag to y)
+  0 w x str         ( clear whatever interrupt, the app will handle it)
+  lr bx  ;c
 
 HardFault_exc handler
   here b  ;c  ( rip)
 
 NMI_exc handler default-handler
   lr bx  ;c  ( thank you, next)
+
+pool,

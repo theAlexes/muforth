@@ -50,7 +50,7 @@ __meta target
   SYSCTRL_OSC32K ! ( start up the internal 32KHz oscillator)
 
   SYSCTRL_PCLKSR SYSCTRL_PCLKSR_OSC32KRDY wait
-  1 mark
+  1 state!
 
   GCLK_CTRL_SWRST GCLK_CTRL ! ( reset the general clock controller)
   begin ( wait for reset to finish)
@@ -58,20 +58,20 @@ __meta target
     GCLK_STATUS c@ GCLK_STATUS_SYNCBUSY and
     or
   0= until
-  2 mark
+  2 state!
 
   ( put osc32k as GCLK2 source, dividing by 1. why 2? because later we'll use 1 for the peripheral clocks, which run faster.)
   2 GCLK_GENCTRL_SRC_OSC32K source-gclk
-  3 mark
+  3 state!
 
   ( the DFLL is, confusingly, 0 in this register; this makes its clock come from OSC32K by way of GCLK2)
   GCLK_TO_DFLL48_REF 2 route-gclk
-  4 mark
+  4 state!
 
   ( work around a bug http://avr32.icgroup.norway.atmel.com/bugzilla/show_bug.cgi?id=9905)
   dfll-sync
   SYSCTRL_DFLLCTRL_ENABLE SYSCTRL_DFLLCTRL ! dfll-sync
-  5 mark
+  5 state!
 
   ( load coarse calibration for FLL)
   NVMCAL @
@@ -90,33 +90,33 @@ __meta target
 
   ( shut the DFLL down so we can bonk a new config in)
   SYSCTRL_DFLLCTRL 0 ! dfll-sync
-  6 mark
+  6 state!
 
   ( bonk a new config in)
   [ SYSCTRL_DFLLCTRL_MODE
     SYSCTRL_DFLLCTRL_CCDIS or
     SYSCTRL_DFLLCTRL_USBCRM or
   #] SYSCTRL_DFLLCTRL set! dfll-sync
-  7 mark
+  7 state!
 
   ( switch it on)
   SYSCTRL_DFLLCTRL_ENABLE SYSCTRL_DFLLCTRL set! dfll-sync
-  8 mark
+  8 state!
 
   ( now enable generator 0 with the DFLL as source)
   0 GCLK_GENCTRL_SRC_DFLL source-gclk ;
 
 : peripheral-clock-init
   GCLK_TO_TCC0_TCC1 0 route-gclk ( tcc0 and tcc1 share the system clock)
-  $9 mark ;
+  $9 state! ;
 | for later:
 |  ( don't divide the 8M clock, scale that down at the peripheral)
 |  [ SYSCTRL_OSC8M_PRESC SYSCTRL_OSC8M_ENABLE or #] SYSCTRL_OSC8M clr!
 |  [ SYSCTRL_OSC8M_ENABLE SYSCTRL_OSC8M_RUNSTDBY or #] SYSCTRL_OSC8M set!
 |  SYSCTRL_PCLKSR SYSCTRL_PCLKSR_OSC8MRDY wait
-|  $a mark
+|  $a state!
 |
 |  ( light up OSC8M for GCLK1)
 |  1 GCLK_GENCTRL_SRC_OSC8M source-gclk
-|  $b mark
+|  $b state!
 |  ( $14 1 route-gclk ( uart)
