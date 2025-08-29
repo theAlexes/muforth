@@ -25,10 +25,14 @@ __meta target
   dup 0= if drop TCC_CCB2 else TCC_CCB0 swap (tcc) then ;
 
 : tcc-unlock ( tcc)
-  dup >r TCC_CTRLBSET_LUPD TCC_CTRLBCLR rot (tcc) c! r> tcc-sync ;
+  dup
+  >r TCC_CTRLBSET_LUPD TCC_CTRLBCLR rot (tcc) c!
+  r> tcc-sync ;
 
 : tcc-next-bit ( bit tcc)
-  dup >r tcc-to-ccb ! r> tcc-unlock ;
+  dup >r tcc-to-ccb !
+  r@ tcc-sync
+  r> tcc-unlock ;
 
 : tcc-set! ( flag reg instance)
   dup >r (tcc) set! r> tcc-sync ;
