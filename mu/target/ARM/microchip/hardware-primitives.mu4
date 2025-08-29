@@ -4,9 +4,9 @@ loading Hardware primitives
 
 __meta target
 
-code +irq  cpsie     next  ;c
-code -irq  cpsid     next  ;c
-code wfi   cpsie wfi next  ;c
+code +irq  cpsie  begin begin next  ;c
+code -irq  cpsid  again  ;c
+code wfi   wfi    again  ;c
 
 : vec>int ( v -- i )
   2/ 2/ 15 - ;
@@ -15,10 +15,10 @@ code wfi   cpsie wfi next  ;c
   1 swap << ;
 
 : nvic-enable-irq ( vector -- )
-  vec>int >bit NVIC_ISER ! ;
+  vec>int >bit NVIC_ICER ! ;
 
 : nvic-init
-  -1 dup NVIC_ISER !
+  -1 dup NVIC_ICER !
          NVIC_ICPR !
   8 0 do NVIC_IPR0 i cells + 0 swap ! loop ;
 

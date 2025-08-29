@@ -16,13 +16,13 @@ __meta target
 : (tcc) ( a t -- a t') 10 << or ;
 
 : tcc-sync ( tcc -- )
-  TCC_SYNCBUSY swap (tcc) -1 ?set ;
+  TCC_SYNCBUSY swap (tcc) -1 ?clr ;
 
 : tcc-period ( period tcc -- )
   TCC_PER swap (tcc) ! ;
 
 : tcc-to-ccb ( tcc - ccbX)
-  dup 0= if drop TCC_CCB0 else TCC_CCB2 swap (tcc) then ;
+  dup 0= if drop TCC_CCB2 else TCC_CCB0 swap (tcc) then ;
 
 : tcc-next-bit ( bit tcc)
   tcc-to-ccb ! ;
@@ -42,7 +42,7 @@ __meta target
   TCC_CTRLA_SWRST TCC_CTRLA r@ tcc-set!
   $11 state!
 
-  TCC_WAVE_WAVEGEN_NPWM TCC_WAVE tcc-set!
+  TCC_WAVE_WAVEGEN_NPWM TCC_WAVE r@ tcc-set!
   $12 state!
 
   0 r@ tcc-next-bit ( technically redundant as we have just reset the damn thing, but let's be sure anyway.)
@@ -54,10 +54,10 @@ __meta target
   TCC_NEOPIXEL_PERIOD r> tcc-period ;
 
 : tcc-start ( tcc --)
-  TCC_CTRLA_ENABLE TCC_CTRLA tcc-set! ;
+  TCC_CTRLA_ENABLE TCC_CTRLA rot tcc-set! ;
 
 : tcc-stop ( tcc -- )
-  TCC_CTRLA_ENABLE TCC_CTRLA tcc-clr! ;
+  TCC_CTRLA_ENABLE TCC_CTRLA rot tcc-clr! ;
 
 ( tcc0 and tcc1 have similar init routines...)
 : tcc0-init

@@ -28,8 +28,8 @@ ld! target/ARM/microchip/samd21-tcc.mu4
   PORT_OUTCLR0 ! ( turn everything off)
   [ 1 15 << #] PORT_OUTSET0 ! ( turn neopixel power on) ;
 
-$07 equ PMUX_EVEN_FUNCTION_E
-$08 equ PMUX_EVEN_FUNCTION_F
+$04 equ PMUX_EVEN_FUNCTION_E
+$05 equ PMUX_EVEN_FUNCTION_F
 
 : pmux-init ( set pin 18 and 10 to their respective TCC functions)
   PORT_PINCFG0__PMUXEN PORT_PINCFG0_18 c!
@@ -38,6 +38,7 @@ $08 equ PMUX_EVEN_FUNCTION_F
   PMUX_EVEN_FUNCTION_E PORT_PMUX0_5 c! ;
 
 : tcc0-handle ( flags)
+  dup 0= if ^ then
   onboard-bits-remaining @ 0= if drop 0 tcc-stop ^ then
   onboard-color @ dup $0080:0000 and 0= if T0H else T1H then 0 tcc-next-bit
   1 << onboard-color !
@@ -60,24 +61,27 @@ $08 equ PMUX_EVEN_FUNCTION_F
   ( tcc1-init ( the fibonacci strand of neopixels defaults to being on TCC0,
                 channel 2. life is pain. luckily we can switch it to TCC1, channel 0)
 
-  $00:00:CC:91 onboard-color !
-  24 onboard-bits-remaining
+  -1 tcc0-flags !
+  $00:0F:0f:0f onboard-color !
+  24 onboard-bits-remaining !
   $4200 state!
+  0 tcc-start
   begin
     -irq
     $4201 state!
     tcc0-flags @ tcc0-handle
     $4202 state!
     0 tcc0-flags !
-    wfi
+    +irq wfi
   again ;
 
 TCC0_IRQ handler
+label TCC0_IRQ'
   TCC_INTFLAG w lit ( addr of int flag to w)
   0 w x ldr         ( int flag to x)
   >v tcc0-flags y lit ( addr of tcc0-flags to y)
-  0 w y str         ( int flag to y)
-  0 w x str         ( clear whatever interrupt, the app will handle it)
+  0 y x str         ( int flag to y)
+  0 w x str         ( clear our interrupt)
   lr bx  ;c
 
 HardFault_exc handler
