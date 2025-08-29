@@ -15,9 +15,9 @@ $1a equ GCLK_TO_TCC0_TCC1
 __meta target
 
 : dfll-sync
-  SYSCTRL_PCLKSR SYSCTRL_PCLKSR_DFLLRDY wait ;
+  SYSCTRL_PCLKSR SYSCTRL_PCLKSR_DFLLRDY ?set ;
 : gclk-sync
-  GCLK_STATUS GCLK_STATUS_SYNCBUSY csync ;
+  GCLK_STATUS GCLK_STATUS_SYNCBUSY ?cclr ;
 
 : source-gclk ( gclk source)
   over ( gclk source gclk)
@@ -49,7 +49,7 @@ __meta target
   $0a << $007f0000 and or ( shift it into its correct place for the calibration value mask it off, OR it with the flags)
   SYSCTRL_OSC32K ! ( start up the internal 32KHz oscillator)
 
-  SYSCTRL_PCLKSR SYSCTRL_PCLKSR_OSC32KRDY wait
+  SYSCTRL_PCLKSR SYSCTRL_PCLKSR_OSC32KRDY ?set
   1 state!
 
   GCLK_CTRL_SWRST GCLK_CTRL ! ( reset the general clock controller)

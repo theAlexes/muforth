@@ -16,12 +16,12 @@ __meta target
 : (tcc) ( a t -- a t') 10 << or ;
 
 : tcc-sync ( tcc -- )
-  TCC_SYNCBUSY swap (tcc) -1 wait ;
+  TCC_SYNCBUSY swap (tcc) -1 ?set ;
 
 : tcc-period ( period tcc -- )
   TCC_PER swap (tcc) ! ;
 
-: tcc-to-ccb ( tcc - ccb0)
+: tcc-to-ccb ( tcc - ccbX)
   dup 0= if drop TCC_CCB0 else TCC_CCB2 swap (tcc) then ;
 
 : tcc-next-bit ( bit tcc)
