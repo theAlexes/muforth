@@ -5,8 +5,8 @@ loading Hardware primitives
 __meta target
 
 code +irq  cpsie  begin begin next  ;c
-code -irq  cpsid  again  ;c
-code wfi   wfi    again  ;c
+code -irq  cpsid        again  ;c
+code wfi   cpsie wfi    again  ;c
 
 : vec>int ( v -- i )
   2/ 2/ $10 - ;

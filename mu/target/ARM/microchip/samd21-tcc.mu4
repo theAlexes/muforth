@@ -18,21 +18,10 @@ __meta target
 : tcc-sync ( tcc -- )
   TCC_SYNCBUSY swap (tcc) -1 ?clr ;
 
-: tcc-period ( period tcc -- )
-  TCC_PERB swap (tcc) ! ;
-
-: tcc-to-ccb ( tcc - ccbX)
-  dup 0= if drop TCC_CCB2 else TCC_CCB0 swap (tcc) then ;
-
 : tcc-unlock ( tcc)
   dup
   >r TCC_CTRLBSET_LUPD TCC_CTRLBCLR rot (tcc) c!
   r> tcc-sync ;
-
-: tcc-next-bit ( bit tcc)
-  dup >r tcc-to-ccb !
-  r@ tcc-sync
-  r> tcc-unlock ;
 
 : tcc-set! ( flag reg instance)
   dup >r (tcc) set! r> tcc-sync ;
@@ -43,6 +32,24 @@ __meta target
 : tcc-c! ( flag reg instance)
   dup >r (tcc) c! r> tcc-sync ;
 
+: tcc-period ( period tcc -- )
+  >r TCC_PERB
+  r@ (tcc) !
+  r@ tcc-sync
+  r> tcc-unlock ;
+
+: tcc-to-ccb ( tcc - ccbX)
+  dup 0= if drop TCC_CCB2 else TCC_CCB0 swap (tcc) then ;
+
+: tcc-next-bit ( bit tcc)
+  >r
+  r@ tcc-to-ccb !
+  r@ tcc-sync
+  r> tcc-unlock ;
+
+: tcc-match-int ( tcc -- int)
+  0= if TCC_INTENSET_MC2 else TCC_INTENSET_MC0 then ;
+
 : (tcc-neopixel-init) ( tcc -- )
   >r
   PM_APBCMASK_TCC0_ r@ << PM_APBCMASK set! ( thankfully, theyre contiguous bits)
@@ -52,23 +59,26 @@ __meta target
   TCC_CTRLA_SWRST TCC_CTRLA r@ tcc-set!
   $11 state!
 
-  TCC_CTRLBSET_LUPD TCC_CTRLBSET r@ tcc-c!
+  r@ tcc-match-int TCC_INTENSET r@ tcc-set!
   $12 state!
 
-  0 r@ tcc-next-bit ( technically redundant as we have just reset the damn thing, but let's be sure anyway.)
+  TCC_WAVE_WAVEGEN_NPWM TCC_WAVE r@ tcc-set!
   $13 state!
 
-  TCC_INTENSET_OVF TCC_INTENSET r@ tcc-set!
+  TCC_NEOPIXEL_PERIOD TCC_PER r@ (tcc) !
   $14 state!
 
-  TCC_WAVE_WAVEGEN_NPWM TCC_WAVE r@ tcc-set!
+  TCC_NEOPIXEL_PERIOD r@ tcc-period
   $15 state!
 
-  TCC_NEOPIXEL_PERIOD r@ tcc-period
+  0 r@ tcc-next-bit ( technically redundant as we have just reset the damn thing, but let's be sure anyway.)
   $16 state!
 
-  TCC_CTRLA_ALOCK TCC_CTRLA r@ tcc-set!
+  TCC_CTRLBSET_LUPD TCC_CTRLBSET r@ tcc-c!
   $17 state!
+
+  TCC_CTRLA_ALOCK TCC_CTRLA r@ tcc-set!
+  $18 state!
 
   r> tcc-unlock ;
 
