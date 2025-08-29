@@ -41,9 +41,10 @@ $08 equ PMUX_EVEN_FUNCTION_F
   onboard-bits-remaining @ 0= if drop 0 tcc-stop ^ then
   onboard-color @ dup $0080:0000 and 0= if T0H else T1H then 0 tcc-next-bit
   1 << onboard-color !
-  onboard-bits-remaining dup @ 1- swap ! ;
+  -1 onboard-bits-remaining +! ;
 
 : main
+  -irq
   -1 state!
   base-clock-init
   -2 state!
@@ -52,21 +53,23 @@ $08 equ PMUX_EVEN_FUNCTION_F
   led-ports-init
   -4 state!
   pmux-init
-  ( nvic-init)
   -5 state!
+  nvic-init
+  -6 state!
   tcc0-init ( the single onboard neopixel is on TCC0, channel 2)
   ( tcc1-init ( the fibonacci strand of neopixels defaults to being on TCC0,
                 channel 2. life is pain. luckily we can switch it to TCC1, channel 0)
 
-  $FF0000 onboard-color !
+  $00:00:CC:91 onboard-color !
   24 onboard-bits-remaining
   $4200 state!
   begin
+    -irq
     $4201 state!
     tcc0-flags @ tcc0-handle
     $4202 state!
     0 tcc0-flags !
-    w-f-i
+    wfi
   again ;
 
 TCC0_IRQ handler
@@ -82,5 +85,4 @@ HardFault_exc handler
 
 NMI_exc handler default-handler
   lr bx  ;c  ( thank you, next)
-
 pool,

@@ -4,28 +4,27 @@ loading Hardware primitives
 
 __meta target
 
-( wait and cwait spin until the bit is set - they wait for ready)
-: wait ( addr mask)
-  begin
-    2dup swap @ and
-  while 0= repeat ( nothing)
-  drop drop ;
+code +irq  cpsie     next  ;c
+code -irq  cpsid     next  ;c
+code wfi   cpsie wfi next  ;c
 
-: cwait ( addr mask)
-  begin
-    2dup swap c@ and
-  while 0= repeat
-  drop drop ;
+: vec>int ( v -- i )
+  2/ 2/ 15 - ;
 
-( sync and csync spin while the bit is set - they wait for the sync to finish)
-: sync ( addr mask)
-  begin
-    2dup swap @ and
-  0= until ( nothing)
-  drop drop ;
+: >bit ( v -- m )
+  1 swap << ;
 
-: csync ( addr mask)
-  begin
-    2dup swap c@ and
-  0= until ( nothing)
-  drop drop ;
+: nvic-enable-irq ( vector -- )
+  vec>int >bit NVIC_ISER ! ;
+
+: nvic-init
+  -1 dup NVIC_ISER !
+         NVIC_ICPR !
+  8 0 do NVIC_IPR0 i cells + 0 swap ! loop ;
+
+: 2drop  drop drop ;
+
+: ?set   ( reg bits)   begin  over @   over and     until  2drop ;
+: ?clr   ( reg bits)   begin  over @   over and  0= until  2drop ;
+: ?cset  ( reg bits)   begin  over c@  over and     until  2drop ;
+: ?cclr  ( reg bits)   begin  over c@  over and  0= until  2drop ;
