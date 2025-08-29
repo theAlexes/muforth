@@ -1,0 +1,54 @@
+|  Copyright 2023 Alex Maestas. (Read the LICENSE for details.)
+| Owes a debt of gratitude to:
+| https://blog.thea.codes/phase-shifted-pwm-on-samd/
+
+loading TCC driver
+
+2 equ TCC_WAVE_WAVEGEN_NPWM
+
+599 equ TCC_NEOPIXEL_PERIOD ( 600 ticks at 48 mhz is 800 kilohertz, but we start from 0)
+
+( neopixel constants)
+191 equ T0H ( 192 ticks is a 32% duty cycle)
+383 equ T1H ( 384, 64%)
+
+__meta target
+: (tcc) ( a t -- a t') 10 << or ;
+
+: tcc-sync ( tcc -- )
+  TCC_SYNCBUSY swap (tcc) -1 wait ;
+
+: tcc-period ( period tcc -- )
+  TCC_PER swap (tcc) ! ;
+
+: tcc-to-ccb ( tcc - ccb0)
+  dup 0= if drop TCC_CCB0 else TCC_CCB2 swap (tcc) then ;
+
+: tcc-next-bit ( bit tcc)
+  tcc-to-ccb ! ;
+
+: (tcc-neopixel-init) ( tcc -- )
+  >r
+  PM_APBCMASK_TCC0_ r@ << PM_APBCMASK set! ( thankfully, theyre contiguous bits)
+  TCC_CTRLA_ENABLE TCC_CTRLA r@ (tcc) clr! r@ tcc-sync
+  $10 state!
+
+  TCC_CTRLA_SWRST TCC_CTRLA r@ (tcc) set! r@ tcc-sync
+  $11 state!
+
+  TCC_WAVE_WAVEGEN_NPWM TCC_WAVE r@ (tcc) set! r@ tcc-sync
+  $12 state!
+
+  TCC_NEOPIXEL_PERIOD r> tcc-period ;
+
+: tcc-stop ( tcc -- )
+  >r
+  TCC_CTRLA_ENABLE TCC_CTRLA r@ clr!
+  r> tcc-sync ;
+
+( tcc0 and tcc1 have similar init routines...)
+: tcc0-init
+  0 (tcc-neopixel-init) ;
+
+: tcc1-init
+  1 (tcc-neopixel-init) ;
