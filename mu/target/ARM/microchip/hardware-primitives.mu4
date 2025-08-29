@@ -9,13 +9,13 @@ code -irq  cpsid  again  ;c
 code wfi   wfi    again  ;c
 
 : vec>int ( v -- i )
-  2/ 2/ 15 - ;
+  2/ 2/ $10 - ;
 
 : >bit ( v -- m )
   1 swap << ;
 
 : nvic-enable-irq ( vector -- )
-  vec>int >bit NVIC_ICER ! ;
+  vec>int >bit NVIC_ISER ! ;
 
 : nvic-init
   -1 dup NVIC_ICER !

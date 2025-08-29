@@ -19,19 +19,25 @@ __meta target
   TCC_SYNCBUSY swap (tcc) -1 ?clr ;
 
 : tcc-period ( period tcc -- )
-  TCC_PER swap (tcc) ! ;
+  TCC_PERB swap (tcc) ! ;
 
 : tcc-to-ccb ( tcc - ccbX)
   dup 0= if drop TCC_CCB2 else TCC_CCB0 swap (tcc) then ;
 
+: tcc-unlock ( tcc)
+  dup >r TCC_CTRLBSET_LUPD TCC_CTRLBCLR rot (tcc) c! r> tcc-sync ;
+
 : tcc-next-bit ( bit tcc)
-  tcc-to-ccb ! ;
+  dup >r tcc-to-ccb ! r> tcc-unlock ;
 
 : tcc-set! ( flag reg instance)
   dup >r (tcc) set! r> tcc-sync ;
 
 : tcc-clr! ( flag reg instance)
   dup >r (tcc) clr! r> tcc-sync ;
+
+: tcc-c! ( flag reg instance)
+  dup >r (tcc) c! r> tcc-sync ;
 
 : (tcc-neopixel-init) ( tcc -- )
   >r
@@ -42,7 +48,7 @@ __meta target
   TCC_CTRLA_SWRST TCC_CTRLA r@ tcc-set!
   $11 state!
 
-  TCC_WAVE_WAVEGEN_NPWM TCC_WAVE r@ tcc-set!
+  TCC_CTRLBSET_LUPD TCC_CTRLBSET r@ tcc-c!
   $12 state!
 
   0 r@ tcc-next-bit ( technically redundant as we have just reset the damn thing, but let's be sure anyway.)
@@ -51,7 +57,16 @@ __meta target
   TCC_INTENSET_OVF TCC_INTENSET r@ tcc-set!
   $14 state!
 
-  TCC_NEOPIXEL_PERIOD r> tcc-period ;
+  TCC_WAVE_WAVEGEN_NPWM TCC_WAVE r@ tcc-set!
+  $15 state!
+
+  TCC_NEOPIXEL_PERIOD r@ tcc-period
+  $16 state!
+
+  TCC_CTRLA_ALOCK TCC_CTRLA r@ tcc-set!
+  $17 state!
+
+  r> tcc-unlock ;
 
 : tcc-start ( tcc --)
   TCC_CTRLA_ENABLE TCC_CTRLA rot tcc-set! ;

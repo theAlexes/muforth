@@ -38,8 +38,8 @@ $05 equ PMUX_EVEN_FUNCTION_F
   PMUX_EVEN_FUNCTION_E PORT_PMUX0_5 c! ;
 
 : tcc0-handle ( flags)
-  dup 0= if ^ then
   onboard-bits-remaining @ 0= if drop 0 tcc-stop ^ then
+  dup 0= if ^ then
   onboard-color @ dup $0080:0000 and 0= if T0H else T1H then 0 tcc-next-bit
   1 << onboard-color !
   -1 onboard-bits-remaining +! ;
@@ -62,7 +62,7 @@ $05 equ PMUX_EVEN_FUNCTION_F
                 channel 2. life is pain. luckily we can switch it to TCC1, channel 0)
 
   -1 tcc0-flags !
-  $00:0F:0f:0f onboard-color !
+  $00:00:0F:0F onboard-color !
   24 onboard-bits-remaining !
   $4200 state!
   0 tcc-start
