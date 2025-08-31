@@ -22,7 +22,10 @@ __meta target
 : source-gclk ( gclk source)
   over ( gclk source gclk)
   [ 1 8 << #] or GCLK_GENDIV ! gclk-sync
-  8 << or [ GCLK_GENCTRL_IDC GCLK_GENCTRL_GENEN or #] or
+  8 << or
+  GCLK_GENCTRL_IDC or
+  GCLK_GENCTRL_GENEN or
+  GCLK_GENCTRL_OE or
   GCLK_GENCTRL ! gclk-sync ;
 
 : route-gclk ( periph source)

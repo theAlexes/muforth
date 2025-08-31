@@ -24,18 +24,27 @@ ld! target/ARM/microchip/samd21-tcc.mu4
   [ 1 10 << ( MO pin to 128-LED strand)
     1 18 << or ( neopixel pin)
     1 15 << or ( neopixel power)
+    1 16 << or ( copy of neopixel pin from TCC0 channel 6)
+    1 11 << or ( gclk5 out, tapped from gclk0)
   #] dup PORT_DIRSET0 ! ( set these pins as outputs)
   PORT_OUTCLR0 ! ( turn everything off)
   [ 1 15 << #] PORT_OUTSET0 ! ( turn neopixel power on) ;
 
 $04 equ PMUX_EVEN_FUNCTION_E
 $05 equ PMUX_EVEN_FUNCTION_F
+$70 equ PMUX_ODD_FUNCTION_H
 
-: pmux-init ( set pin 18 and 10 to their respective TCC functions)
-  PORT_PINCFG0__PMUXEN PORT_PINCFG0_18 c!
+: pmux-init
+  PORT_PINCFG0__PMUXEN PORT_PINCFG0_11 c! ( pin PA11 to function H, GCLK channel 5)
+  $30 state!
+  PORT_PINCFG0__PMUXEN PORT_PINCFG0_16 c! ( pin PA16 to function F, TCC0 channel 6)
+  PMUX_EVEN_FUNCTION_F PORT_PMUX0_8 c!
+  $31 state!
+  PORT_PINCFG0__PMUXEN PORT_PINCFG0_18 c! ( pin PA18 to function F TCC0 channel 2)
   PMUX_EVEN_FUNCTION_F PORT_PMUX0_9 c!
-  PORT_PINCFG0__PMUXEN PORT_PINCFG0_10 c!
-  PMUX_EVEN_FUNCTION_E PORT_PMUX0_5 c! ;
+  $32 state!
+  PORT_PINCFG0__PMUXEN PORT_PINCFG0_10 c! ( pin PA10 to function E, TCC1 channel 0)
+  [ PMUX_ODD_FUNCTION_H PMUX_EVEN_FUNCTION_E or #] PORT_PMUX0_5 c! ;
 
 : tcc0-handle ( flags)
   onboard-bits-remaining @ 0= if drop 0 tcc-stop ^ then
@@ -55,15 +64,17 @@ $05 equ PMUX_EVEN_FUNCTION_F
   -4 state!
   pmux-init
   -5 state!
-  nvic-init
+  5 GCLK_GENCTRL_SRC_DFLL source-gclk
   -6 state!
+  nvic-init
+  -7 state!
   tcc0-init ( the single onboard neopixel is on TCC0, channel 2)
   ( tcc1-init ( the fibonacci strand of neopixels defaults to being on TCC0,
                 channel 2. life is pain. luckily we can switch it to TCC1, channel 0)
 
   -1 tcc0-flags !
   $00:00:0F:0F onboard-color !
-  24 onboard-bits-remaining !
+  23 onboard-bits-remaining !
   $4200 state!
   0 tcc-start
   begin
