@@ -21,18 +21,21 @@ ld! target/ARM/microchip/samd21-clocks.mu4
 ld! target/ARM/microchip/samd21-tcc.mu4
 
 : led-ports-init
-  32 0 do 0 i PORT_PINCFG0_0 + c! loop ( clear pin configs)
+  32 0 do $40 i PORT_PINCFG0_0 + c! loop ( set strong drive on all output pins)
+  $40 state!
   [ 10 pin  ( MO pin to 128-LED strand)
     18 pin| ( neopixel pin)
     15 pin| ( neopixel power)
     16 pin| ( copy of neopixel pin from TCC0 channel 6)
     11 pin| ( gclk5 out, tapped from gclk0)
   #] dup PORT_DIRSET0 ! ( set these pins as outputs)
+  $41 state!
   PORT_OUTCLR0 ! ( turn everything off)
+  $42 state!
   [ 15 pin #] PORT_OUTSET0 ! ( turn neopixel power on) ;
 
 : mux-pin ( func pin --)
-  dup PORT_PINCFG0_0 + PORT_PINCFG0__PMUXEN swap c!
+  dup PORT_PINCFG0_0 + PORT_PINCFG0__PMUXEN swap cset!
   2/ PORT_PMUX0_0 + cset! ;
 
 : pmux-init
