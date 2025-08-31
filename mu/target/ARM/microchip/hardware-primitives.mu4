@@ -28,3 +28,10 @@ code wfi   cpsie wfi    again  ;c
 : ?clr   ( reg bits)   begin  over @   over and  0= until  2drop ;
 : ?cset  ( reg bits)   begin  over c@  over and     until  2drop ;
 : ?cclr  ( reg bits)   begin  over c@  over and  0= until  2drop ;
+
+meta: pin ( pin) swap 1 << ;
+meta: pin| ( pin) pin or ;
+
+$04 equ PMUX_EVEN_FUNCTION_E
+$05 equ PMUX_EVEN_FUNCTION_F
+$70 equ PMUX_ODD_FUNCTION_H

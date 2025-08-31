@@ -249,9 +249,11 @@ code c@    ( a - ub)  0 top top ldrb   next  ;c  ( Unsigned!)
 code  !    ( w a)     w dpop1   begin begin begin
                                 0 top w str    poptop j  ;c
 code h!    ( h a)     w dpop1   0 top w strh   poptop j  ;c
-code c!    ( b a)     w dpop1   0 top w strb   poptop j  ;c
+code c!    ( b a)     w dpop1   begin begin 0 top w strb   poptop j  ;c
 
 ( Generic, non-atomic read-modify-write ops: add, bit set, and bit clear.)
+code cset! ( x a)     x dpop1   0 top w ldrb  x w w orrs  again  ;c
+code cclr! ( x a)     x dpop1   0 top w ldrb  x w w bics  again  ;c
 code +!    ( x a)     x dpop1   0 top w ldr   x w w adds  again  ;c
 code set!  ( x a)     x dpop1   0 top w ldr   x w w orrs  again  ;c
 code clr!  ( x a)     x dpop1   0 top w ldr   x w w bics  again  ;c
