@@ -92,7 +92,7 @@ __meta target
   #] SYSCTRL_DFLLMUL !
 
   ( shut the DFLL down so we can bonk a new config in)
-  SYSCTRL_DFLLCTRL 0 ! dfll-sync
+  0 SYSCTRL_DFLLCTRL ! dfll-sync
   6 state!
 
   ( bonk a new config in)
