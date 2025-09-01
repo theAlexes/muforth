@@ -6,11 +6,11 @@ loading TCC driver
 
 2 equ TCC_WAVE_WAVEGEN_NPWM
 
-599 equ TCC_NEOPIXEL_PERIOD ( 600 ticks at 48 mhz is 800 kilohertz, but we start from 0)
+59 equ TCC_NEOPIXEL_PERIOD ( 60 ticks at 48 mhz is 800 kilohertz, but we start from 0)
 
 ( neopixel constants)
-191 equ T0H ( 192 ticks is a 32% duty cycle)
-383 equ T1H ( 384, 64%)
+19 equ T0H ( 19 ticks is about a 32% duty cycle)
+39 equ T1H ( 39, 64%)
 
 __meta target
 : (tcc) ( a t -- a t') 10 << or ;
@@ -71,8 +71,7 @@ __meta target
   0 r@ tcc-next-bit ( technically redundant as we have just reset the damn thing, but let's be sure anyway.)
   $15 state!
 
-  [ 1 8 << ( trigger an output event on timer overflow)
-  #] TCC_EVCTRL !
+  TCC_DBGCTRL_DBGRUN TCC_DBGCTRL r@ (tcc) c!
   $16 state!
 
   r> tcc-unlock ;

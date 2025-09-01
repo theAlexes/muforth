@@ -91,6 +91,7 @@ __meta target
 
   ( bonk a new config in)
   [ SYSCTRL_DFLLCTRL_MODE
+    SYSCTRL_DFLLCTRL_BPLCKC or
     SYSCTRL_DFLLCTRL_CCDIS or
     SYSCTRL_DFLLCTRL_USBCRM or
   #] SYSCTRL_DFLLCTRL set! dfll-sync
