@@ -29,9 +29,13 @@ code wfi   cpsie wfi    again  ;c
 : ?cset  ( reg bits)   begin  over c@  over and     until  2drop ;
 : ?cclr  ( reg bits)   begin  over c@  over and  0= until  2drop ;
 
-meta: pin ( pin) swap 1 << ;
+meta: pin ( pin) 1 swap << ;
 meta: pin| ( pin) pin or ;
 
 $04 equ PMUX_EVEN_FUNCTION_E
 $05 equ PMUX_EVEN_FUNCTION_F
 $70 equ PMUX_ODD_FUNCTION_H
+
+: mux-pin ( func pin --)
+  dup PORT_PINCFG0_0 + PORT_PINCFG0__PMUXEN swap cset!
+  2/ PORT_PMUX0_0 + cset! ;

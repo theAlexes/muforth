@@ -5,13 +5,26 @@
 loading Fibonacci LED main program
 
 __meta
+decimal
+
+48 dup
+   buffer even-fb
+   buffer odd-fb
+
+ram
+here 16 aligned-by goto ( dma buffers must be properly aligned)
+flash
+
+32 dup buffer dma-descriptor
+       buffer dma-writeback
 
 variable state
-variable tcc0-flags
 variable onboard-color
-variable onboard-bits-remaining
-
-decimal
+variable dmac-ints
+( variable tcc1-flags)
+( 24 dup buffer strand-colors
+         buffer strand-next-colors)
+( for later: 24 buffer onboard-fb)
 
 : state! ( a -- )
   state ! ;
@@ -34,22 +47,74 @@ ld! target/ARM/microchip/samd21-tcc.mu4
   $42 state!
   [ 15 pin #] PORT_OUTSET0 ! ( turn neopixel power on) ;
 
-: mux-pin ( func pin --)
-  dup PORT_PINCFG0_0 + PORT_PINCFG0__PMUXEN swap cset!
-  2/ PORT_PMUX0_0 + cset! ;
-
 : pmux-init
   PMUX_ODD_FUNCTION_H  11 mux-pin   ( pin PA11 to function H, GCLK channel 5)
   PMUX_EVEN_FUNCTION_F 16 mux-pin   ( pin PA16 to function F, TCC0 channel 6)
   PMUX_EVEN_FUNCTION_F 18 mux-pin   ( pin PA18 to function F, TCC0 channel 2)
   PMUX_EVEN_FUNCTION_E 10 mux-pin ; ( pin PA10 to function E, TCC1 channel 0)
 
-: tcc0-handle ( flags)
-  onboard-bits-remaining @ 0= if drop 0 tcc-stop ^ then
-  dup 0= if ^ then
-  onboard-color @ dup $0080:0000 and 0= if T0H else T1H then 0 tcc-next-bit
-  1 << onboard-color !
-  -1 onboard-bits-remaining +! ;
+: onboard-to-fb ( -- )
+  onboard-color @
+  24 0 do
+    dup $0080:0000 and 0= if T0H else T1H then
+    even-fb i 2* + h!
+    2*
+  loop
+  drop ;
+
+: flags>descr           h! ; ( f desc --)
+: btcnt>descr        2+ h! ; ( ditto)
+:  src@>descr     cell+  ! ;
+: dest@>descr 2 cells +  ! ;
+: next@>descr 3 cells +  ! ;
+
+: onboard-dma-descr-init ( descr -- descr)
+  >r
+  [ 1 ( valid)
+    1  3 << or ( blockact interrupt)
+    1 10 << or ( source increment)
+  #] r@ flags>descr
+  24 r@ btcnt>descr ( 24 bytes to transfer)
+  even-fb 24 + r@ src@>descr ( point to the end of the buffer, because that's where you have to point)
+  0 tcc-to-ccb r@ dest@>descr ( write to TCC0's CCB)
+  r> ;
+
+: dmac-init
+  ( reset the thing)
+  [ DMAC_CTRL_DMAENABLE DMAC_CTRL_CRCENABLE or #] DMAC_CTRL 2dup h!
+  swap ?cclr ( sync on disable)
+  $20 state!
+
+  DMAC_CTRL_SWRST DMAC_CTRL 2dup c!
+  swap ?cclr ( sync on reset)
+  $21 state!
+
+  [ DMAC_CTRL_LVLEN0
+    DMAC_CTRL_LVLEN1 or
+    DMAC_CTRL_LVLEN2 or
+    DMAC_CTRL_LVLEN3 or
+  #] DMAC_CTRL c! ( enable all priorities)
+  $22 state!
+
+  dma-writeback DMAC_WRBADDR !
+  dma-descriptor onboard-dma-descr-init DMAC_BASEADDR !
+  $23 state!
+
+  ( set up channel 0 to beat to the timer)
+  0 DMAC_CHID c!
+  [ $02 22 <<   ( one beat per trigger)
+    $0D 8 << or ( trigger on TCC0 overflow)
+  #] DMAC_CHCTRLB !
+  $24 state!
+
+  DMAC_IRQ nvic-enable-irq
+  $25 state!
+
+  DMAC_CTRL_DMAENABLE DMAC_CTRL ! ;
+
+: dma-channel-start ( ch)
+  DMAC_CHID c!
+  %10 DMAC_CHCTRLA cset! ;
 
 : main
   -irq
@@ -70,32 +135,48 @@ ld! target/ARM/microchip/samd21-tcc.mu4
   ( tcc1-init ( the fibonacci strand of neopixels defaults to being on TCC0,
                 channel 2. life is pain. luckily we can switch it to TCC1, channel 0)
 
-  -1 tcc0-flags !
   $00:00:0F:0F onboard-color !
-  23 onboard-bits-remaining !
+  onboard-to-fb
   $4200 state!
+  0 dma-channel-start
   0 tcc-start
   begin
     -irq
     $4201 state!
-    tcc0-flags @ tcc0-handle
+    dmac-ints @
     $4202 state!
-    0 tcc0-flags !
+    0 dmac-ints !
     +irq wfi
   again ;
 
-TCC0_IRQ handler
-label TCC0_IRQ'
-  TCC_INTFLAG w lit ( addr of int flag to w)
-  0 w x ldr         ( int flag to x)
-  >v tcc0-flags y lit ( addr of tcc0-flags to y)
-  0 y x str         ( int flag to y)
-  0 w x str         ( clear our interrupt)
-  lr bx  ;c
+DMAC_IRQ handler
+label DMAC_IRQ'
+  begin
+    DMAC_INTPEND w lit ( everything we need for a while is within $1f reach)
+     4  w  x ldr  ( reads the DMAC_INTSTATUS register)
+        x  x tst
+    0= if lr bx then ( if there's none set, bail)
+    >v dmac-ints y lit
+    0   w  x ldr  ( now load the DMAC_INTPEND register)
+        x  y mov  ( stash it in y so we can check the error bits later)
+       $f  z movs
+     z  x  x ands ( mask off the ID)
+   $1f  w  x strb ( deposit the id in DMAC_CHID)
+     8  y  y lsrs
+     z  y  y ands ( mask off the error bits)
+        0  z movs
+     3  z  z subs
+        z  y tst
+    0!= if 1 bkpt then ( lockup if it's anything other than a transfer-complete interrupt)
+    DMAC_CHINTFLAG w lit ( now load up the interrupt flag)
+     0  w  x ldrb
+  again ;c
 
 HardFault_exc handler
+label HardFault
   here b  ;c  ( rip)
 
 NMI_exc handler default-handler
-  lr bx  ;c  ( thank you, next)
+label Spurious
+  2 bkpt  ;c ( lockup!)
 pool,

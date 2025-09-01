@@ -59,26 +59,23 @@ __meta target
   TCC_CTRLA_SWRST TCC_CTRLA r@ tcc-set!
   $11 state!
 
-  r@ tcc-match-int TCC_INTENSET r@ tcc-set!
+  TCC_WAVE_WAVEGEN_NPWM TCC_WAVE r@ tcc-set!
   $12 state!
 
-  TCC_WAVE_WAVEGEN_NPWM TCC_WAVE r@ tcc-set!
+  TCC_NEOPIXEL_PERIOD TCC_PER r@ (tcc) !
   $13 state!
 
-  TCC_NEOPIXEL_PERIOD TCC_PER r@ (tcc) !
+  TCC_NEOPIXEL_PERIOD r@ tcc-period
   $14 state!
 
-  TCC_NEOPIXEL_PERIOD r@ tcc-period
+  0 r@ tcc-next-bit ( technically redundant as we have just reset the damn thing, but let's be sure anyway.)
   $15 state!
 
-  0 r@ tcc-next-bit ( technically redundant as we have just reset the damn thing, but let's be sure anyway.)
-  $16 state!
-
-  TCC_CTRLBSET_LUPD TCC_CTRLBSET r@ tcc-c!
-  $17 state!
-
-  TCC_CTRLA_ALOCK TCC_CTRLA r@ tcc-set!
-  $18 state!
+|  TCC_CTRLBSET_LUPD TCC_CTRLBSET r@ tcc-c!
+|  $16 state!
+|
+|  TCC_CTRLA_ALOCK TCC_CTRLA r@ tcc-set!
+|  $17 state!
 
   r> tcc-unlock ;
 
@@ -90,9 +87,7 @@ __meta target
 
 ( tcc0 and tcc1 have similar init routines...)
 : tcc0-init
-  0 (tcc-neopixel-init)
-  TCC0_IRQ nvic-enable-irq ;
+  0 (tcc-neopixel-init) ;
 
 : tcc1-init
-  1 (tcc-neopixel-init)
-  TCC1_IRQ nvic-enable-irq ;
+  1 (tcc-neopixel-init) ;

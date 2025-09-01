@@ -401,7 +401,7 @@ meta: d.   ( tdlo tdhi)   d>  \f  . ;
 .then  ( notyet)
 
 { h @ }  ( save region)
-ram
+| ram
 
 ( For debugging and interactive execution.)
 
