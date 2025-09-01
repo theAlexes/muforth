@@ -71,11 +71,9 @@ __meta target
   0 r@ tcc-next-bit ( technically redundant as we have just reset the damn thing, but let's be sure anyway.)
   $15 state!
 
-|  TCC_CTRLBSET_LUPD TCC_CTRLBSET r@ tcc-c!
-|  $16 state!
-|
-|  TCC_CTRLA_ALOCK TCC_CTRLA r@ tcc-set!
-|  $17 state!
+  [ 1 8 << ( trigger an output event on timer overflow)
+  #] TCC_EVCTRL !
+  $16 state!
 
   r> tcc-unlock ;
 

@@ -26,6 +26,8 @@ variable dmac-ints
          buffer strand-next-colors)
 ( for later: 24 buffer onboard-fb)
 
+variable end-of-static
+
 : state! ( a -- )
   state ! ;
 
@@ -71,17 +73,18 @@ ld! target/ARM/microchip/samd21-tcc.mu4
 : onboard-dma-descr-init ( descr -- descr)
   >r
   [ 1 ( valid)
+    1  8 << or ( halfword size)
     1  3 << or ( blockact interrupt)
     1 10 << or ( source increment)
   #] r@ flags>descr
-  24 r@ btcnt>descr ( 24 bytes to transfer)
-  even-fb 24 + r@ src@>descr ( point to the end of the buffer, because that's where you have to point)
+  24 r@ btcnt>descr ( 24 halfwords to transfer)
+  even-fb 24 2* + r@ src@>descr ( point to the end of the buffer, because that's where you have to point)
   0 tcc-to-ccb r@ dest@>descr ( write to TCC0's CCB)
   r> ;
 
 : dmac-init
   ( reset the thing)
-  [ DMAC_CTRL_DMAENABLE DMAC_CTRL_CRCENABLE or #] DMAC_CTRL 2dup h!
+  [ DMAC_CTRL_DMAENABLE DMAC_CTRL_CRCENABLE or #] DMAC_CTRL 2dup cclr!
   swap ?cclr ( sync on disable)
   $20 state!
 
@@ -93,7 +96,7 @@ ld! target/ARM/microchip/samd21-tcc.mu4
     DMAC_CTRL_LVLEN1 or
     DMAC_CTRL_LVLEN2 or
     DMAC_CTRL_LVLEN3 or
-  #] DMAC_CTRL c! ( enable all priorities)
+  #] DMAC_CTRL h! ( enable all priorities)
   $22 state!
 
   dma-writeback DMAC_WRBADDR !
@@ -107,6 +110,7 @@ ld! target/ARM/microchip/samd21-tcc.mu4
   #] DMAC_CHCTRLB !
   $24 state!
 
+  %10 DMAC_CHINTENSET c!
   DMAC_IRQ nvic-enable-irq
   $25 state!
 
@@ -118,19 +122,25 @@ ld! target/ARM/microchip/samd21-tcc.mu4
 
 : main
   -irq
-  -1 state!
+  end-of-static $2000:0000 do 0 i ! cell +loop ( wipe RAM before we do anything the fuck else)
+  $FEED:FACE end-of-static !
+  1 state!
   base-clock-init
-  -2 state!
+  2 state!
   peripheral-clock-init
-  -3 state!
+  3 state!
   led-ports-init
-  -4 state!
+  4 state!
   pmux-init
-  -5 state!
+  5 state!
   5 GCLK_GENCTRL_SRC_DFLL source-gclk
-  -6 state!
+  6 state!
   nvic-init
-  -7 state!
+  7 state!
+  dmac-init
+  8 state!
+  evsys-init
+  9 state!
   tcc0-init ( the single onboard neopixel is on TCC0, channel 2)
   ( tcc1-init ( the fibonacci strand of neopixels defaults to being on TCC0,
                 channel 2. life is pain. luckily we can switch it to TCC1, channel 0)
