@@ -33,6 +33,7 @@ variable end-of-static
 ld! target/ARM/microchip/hardware-primitives.mu4
 ld! target/ARM/microchip/samd21-clocks.mu4
 ld! target/ARM/microchip/samd21-tcc.mu4
+ld! target/ARM/microchip/samd21-dmac.mu4
 
 : led-ports-init
   32 0 do $40 i PORT_PINCFG0_0 + c! loop ( set strong drive on all output pins)
@@ -62,78 +63,6 @@ ld! target/ARM/microchip/samd21-tcc.mu4
     2*
   loop
   drop ;
-
-: flags>descr           h! ; ( f desc --)
-: btcnt>descr        2+ h! ; ( ditto)
-:  src@>descr     cell+  ! ;
-: dest@>descr 2 cells +  ! ;
-: next@>descr 3 cells +  ! ;
-
-: onboard-zero-dma-descr-init
-  onboard-dma-zero >r
-  [ 1 ( valid)
-    3  1 << or ( strobe an event per beat)
-    1  8 << or ( halfword size)
-    1  3 << or ( blockact interrupt)
-  #] r@ flags>descr
-  1 r@ btcnt>descr
-  r@ 4 cells + 2- r@ src@>descr ( pull from the zero at the end of this block!)
-  0 tcc-to-ccb r> dest@>descr ( step on tcc0's CCB) ;
-
-: onboard-dma-descr-init ( descr -- descr)
-  onboard-zero-dma-descr-init ( need this one first)
-  >r
-  [ 1 ( valid)
-    3  1 << or ( strobe an event per beat)
-    1  8 << or ( halfword size)
-(    1  3 << or  blockact interrupt)
-    1 12 << or ( stepsel on the source)
-    1 10 << or ( source increment)
-  #] r@ flags>descr
-  24 r@ btcnt>descr ( 24 halfwords to transfer)
-  even-fb 24 2* + r@ src@>descr ( point to the end of the buffer, because that's where you have to point)
-  0 tcc-to-ccb r@ dest@>descr ( write to TCC0's CCB)
-  onboard-dma-zero r@ next@>descr
-  r> ;
-
-: dmac-init
-  ( reset the thing)
-  [ DMAC_CTRL_DMAENABLE DMAC_CTRL_CRCENABLE or #] DMAC_CTRL 2dup cclr!
-  swap ?cclr ( sync on disable)
-  $20 state!
-
-  DMAC_CTRL_SWRST DMAC_CTRL 2dup c!
-  swap ?cclr ( sync on reset)
-  $21 state!
-
-  dma-writeback DMAC_WRBADDR !
-  dma-descriptor onboard-dma-descr-init DMAC_BASEADDR !
-  $23 state!
-
-  ( set up channel 0 to beat to the timer)
-  0 DMAC_CHID c!
-  [ 1            ( normal transfer)
-    $02 22 << or ( one beat per trigger)
-    $0D 8  << or ( trigger on TCC0 overflow)
-  #] DMAC_CHCTRLB !
-  $24 state!
-
-  DMAC_DBGCTRL_DBGRUN DMAC_DBGCTRL c!
-  $25 state!
-
-  %10 DMAC_CHINTENSET c!
-  DMAC_IRQ nvic-enable-irq
-  $26 state!
-
-  [ DMAC_CTRL_LVLEN0
-    DMAC_CTRL_LVLEN1 or
-    DMAC_CTRL_LVLEN2 or
-    DMAC_CTRL_LVLEN3 or
-    DMAC_CTRL_DMAENABLE or #] DMAC_CTRL h! ;
-
-: dma-channel-start ( ch)
-  DMAC_CHID c!
-  %10 DMAC_CHCTRLA cset! ;
 
 : main
   -irq
