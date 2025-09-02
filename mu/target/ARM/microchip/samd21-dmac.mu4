@@ -27,13 +27,11 @@ __meta target
   >r
   [ 1 ( valid)
     3  1 << or ( strobe an event per beat)
-    1  8 << or ( halfword size)
-(    1  3 << or  blockact interrupt)
-    1 12 << or ( stepsel on the source)
+    1 12 << or ( stepsel on the source, bytesized)
     1 10 << or ( source increment)
   #] r@ flags>descr
-  24 r@ btcnt>descr ( 24 halfwords to transfer)
-  even-fb 24 2* + r@ src@>descr ( point to the end of the buffer, because that's where you have to point)
+  24 r@ btcnt>descr ( 24 bytes to transfer)
+  onboard-fb 24 + r@ src@>descr ( point to the end of the buffer, because that's where you have to point)
   0 tcc-to-ccb r@ dest@>descr ( write to TCC0's CCB)
   onboard-dma-zero r@ next@>descr
   r> ;

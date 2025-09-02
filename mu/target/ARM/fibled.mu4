@@ -9,10 +9,12 @@ decimal
 
 meta: dma-align h preserve ram here 16 aligned-by goto ;
 
-48 dup
+24 dup dup
    buffer even-fb
    buffer odd-fb
+   buffer onboard-fb
 dma-align
+16 buffer strand-dma-zero
 16 buffer onboard-dma-zero
 dma-align
 32 dup buffer dma-descriptor
@@ -59,7 +61,7 @@ ld! target/ARM/microchip/samd21-dmac.mu4
   onboard-color @
   24 0 do
     dup $0080:0000 and 0= if T0H else T1H then
-    even-fb i 2* + h!
+    onboard-fb i + c!
     2*
   loop
   drop ;
